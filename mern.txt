@@ -1,0 +1,382 @@
+npm init
+in gitignore, include node_modules/
+npm i express express-validator bcryptjs config gravatar jsonwebtoken mongoose request
+npm i -D nodemon concurrently
+
+in server.js :
+const express = require('express');
+const app = express();
+app.get('/', (req, res) => res.send('API running'));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server started on ${PORT}`));
+
+in package.json :
+"start": "node server",
+"server": "nodemon server"
+
+npm run server
+
+go to postman:
+send a get request to localhost 5000 and see if api is running
+
+go to mongodbatlas, copy the uri
+
+create the config folder and default.json file to create global variables u can use across the app
+{
+    "mongoURI": "mongodb+srv://vinaynaidu:vinaynaidu@devconnector.nbeqi.mongodb.net/<dbname>?retryWrites=true&w=majority"
+}
+
+now create db.js and complete the database logic:
+
+const mongoose = require('mongoose');
+const config = require('config');
+const db = config.get('mongoURI');
+
+const connectDB = async () => {
+    try {
+        await mongoose.connect(db);
+        console.log('MongoDB Connected...');
+    } catch(err) {
+        console.error(err.message);
+        process.exit(1);
+    }
+}
+
+module.exports = connectDB;
+
+now go back to server and call the connectDB function:
+const connectDB = require('./config/db');
+connectDB();
+
+Now go back to db.js and pass a json to connect to db with unifiedtopology and newurlparser
+
+Now create a folder called routes and another folder called api inside routes which contains -
+auth.js, posts.js, profile.js, users.js which contain -
+
+const express = require('express');
+const router = express.Router();
+
+//@route GET api/users
+//@desc Test route
+//@access Public
+router.get('/', (req, res) => res.send('User route'));
+
+module.exports = router;
+
+now go to server js and define the routes - 
+app.use('api/users', require('./routes/api/users'));
+app.use('api/auth', require('./routes/api/auth'));
+app.use('api/profile', require('./routes/api/profile'));
+app.use('api/posts', require('./routes/api/posts'));
+
+in postman, create a few collections
+
+Now its creating the user model - 
+create a new folder in the root called models and create a file called User.js
+const mongoose = require('mongoose');
+const UserSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true
+    },
+    password: {
+        type: String,
+        required: true
+    },
+    avatar: {
+        type: String
+    },
+    date: {
+        type: Date,
+        default: Date.now
+    }
+});
+module.exports = User = mongoose.model('user', UserSchema);
+
+We ll create a route for registering users - 
+go to users.js and change it to post request and then add middleware for bodyparser (to use req.body) in the server.js file
+app.use(express.json({ extended: false }));
+
+Go to postman and send a post request to the api/users route
+change headers to content-type application/json and under body choose raw and send in a json object and see if console.log is workin
+
+Now to handle validation go to users.js - amd import these
+const express = require('express');
+const router = express.Router();
+const gravatar = require('gravatar');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const config = require('config');
+const { check, validationResult } = require('express-validator');
+
+Now add the second parameter to the post route
+[check('name', 'Name is required').not().isEmpty(),
+    check('email', 'Please add avalid email').isEmail(),
+    check('password', 'Please enter a password with 6 or more characters')]
+
+import the User model is users.js and then do the stuff where is says //check if user is present
+before that get the user model for using req.body
+
+get the users gravatar - 
+const avatar = gravatar.url(email, {
+        s: '200',
+        r: 'pg',
+        d: 'mm'
+    })
+
+create a user object - 
+user = new User({
+        name, email, avatar, password
+    });
+
+encrypt the password - 
+const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+and then save the user
+and then go a few lines up and add return before res.status(400).json({ errors: [{msg: 'User already exists'}] });
+
+Implementing the jsonwebtoken - 
+const payload = {
+        user: {
+            id: user.id
+        }
+    }
+
+Go to config and add a secret - 
+and again bring it in users using require
+
+const payload = {
+        user: {
+            id: user.id
+        }
+    }
+    jwt.sign(payload, 
+        config.get('jwtToken'), 
+        {expiresIn: 360000}, 
+        (err, token) => {
+            if (err) throw err;
+            res.json({ token });
+        
+        });
+
+
+custom auth middleware - create folder middleware and file named auth.js
+const jwt = require('jsonwebtoken');
+const config = require('config');
+
+module.exports = function(req, res, next) {
+    //get token from header
+    const token = req.header('x-auth-token');
+
+    //check if no token
+    if(!token) {
+        return res.status(401).json({ msg: 'No token, authorization denied.' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, config.get('jwtSecret'));
+        req.user = decoded.user;
+        next();
+    } catch(err) {
+        res.status(401).json({ msg:'Token is not valid' });
+    }
+}
+
+Now complete auth.js in api - copy paste route from register and tweak
+This completes Registration and Authentication.
+
+*******************************************************************************************************************
+
+Creating the profile - 
+see the schema from that file called Profile.js
+
+Now build the api route to get the current users profile in api/profile/me
+It is private as we need to send the token and we need our auth middleware, be sure to pull that up
+
+Creating the profile and updating the profile - 
+see the entire profile.js file in the /api/profile route
+
+We ll add a couple more end points for getting all profiles - 
+
+We ll add a route to delete the user and profile - 
+
+We ll add a route to add experience -
+
+We ll add a route to remove experience - 
+
+Simliarly for education -
+
+We ll add a route for github repos - 
+
+*********************************************************************** end of backend
+
+Front end-
+npx create-react-app client
+
+now we have to make changes to package.json wrt concurrently so that both react and express can start at the same time.
+"dev": "concurrently \"npm run server\" \"npm run client\""
+
+now we can do npm run dev to do both.
+
+cd client
+npm i axios react-router-dom redux react-redux redux-thunk redux-devtools-extension moment react-moment
+remove gitignore and readme
+rm -rf .git
+
+Now go the package.json in the client and add a proxy with axios.
+"proxy":"http://localhost:5000"
+
+Delete serviceworker logo apptestjs and indexcss
+
+go to indexjs and make it look like this-
+import React from 'react';
+import ReactDOM from 'react-dom';
+import App from './App';
+ReactDOM.render(
+  <App />,
+  document.getElementById('root')
+);
+
+go to appjs-
+import React, { Fragment }  from 'react';
+import './App.css';
+
+const  App = () => (
+  
+    <Fragment>
+      <h1>App</h1>
+    </Fragment>
+
+);
+
+export default App;
+
+clear whatever is in appcss
+copy from style.css in theme to app.css
+change the landing page to ./showcase and then paste this image in img in src in client
+
+now we have to link font awesome in index.html
+
+create a folder called components and then navbar.js and landing.js
+inside navbarjs - type rac enter, it ll create a functional component for you, now we ll have static components initially
+copy and paste navbar from themes inside index.html inside the navbar component. change class to className.
+
+now in landing, do rac enter, copy paste landing from theme material.
+
+go to app.js and pull up these components - 
+import Navbar from './components/layout/Navbar';
+import Landing from './components/layout/Landing';
+
+React router setup - in app.js
+import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+const  App = () => (
+  <Router>
+    <Fragment>
+      <Navbar />
+      <Route exact path='/' component={ Landing } />
+      <Landing />
+    </Fragment>
+  </Router>
+);
+
+Now create a folder called auth in components and files called Loginjs and registerjs and add basic stuff - 
+import React from 'react'
+export const Login = () => {
+    return (
+        <div>
+            Login
+        </div>
+    )
+}
+export default Login
+
+now create section container in app.js - 
+
+now we should get the navbar working - 
+inside navbar js. instead of using href we pull up link and use
+
+Simliarly for the buttons in the landing page - 
+
+Now creating the register form -
+copy the section from register.html in theme and use in the register component, change class to className
+now pull up usestate
+const [formData, setFormData] = useState({
+        name:'',
+        email:'',
+        password:'',
+        password2:''
+    }); 
+const { name, email, password, password2 } = formData;
+
+now for each of the fields in the form we should add a value attritbute and an onchange handler.
+define the onchange function in the Beginning too, now set onsubmit for the form
+
+we wanna implement adding a user using a redux action but before that we are trying one more method.
+
+copy paste everything from registerjs into loginjs and tweak
+
+***************************************************
+
+REDUX - Its a state manager to handle the state well, as it is a large application, we wanna access everything from everywhere instead 
+of passing from one component to other component. We ll have multiple reducers for each action. This is why we needed reduxdevtools.
+
+creating a redux store - 
+go to src in client and create store.js - 
+import { createStore, applyMiddleware } from 'redux';
+import { composeWithDevTools } from 'redux-devtools-extension';
+import thunk from 'redux-thunk';
+import rootReducer from './reducers';
+const initialState = {};
+const middleware = [thunk];
+const store = createStore(rootReducer, initialState, composeWithDevTools(applyMiddleware(...middleware)));
+export default store;
+
+create index.js in reducers in src - 
+
+in order to use this store, in app.js - 
+import { Provider } from 'react-redux'; //we can use react and redux together with this
+import store from './store'; //the one we created now
+
+wrap the app related stuff inside a provider
+
+inside index.js of reducers - 
+import { combineReducers } from 'redux';
+export default combineReducers({
+});
+//the other reducers will go in here and the devtools will be working in chrome
+
+we ll make the alert reducer now - 
+go to reducers and create alert.js, make sure to include this reducer in combinereducers object in index.js
+
+create a folder called actions in src, where we ll define actions - 
+in types.js - 
+export const SET_ALERT = 'SET_ALERT';
+export const REMOVE_ALERT = 'REMOVE_ALERT';
+
+create actions folder in src with alert.js,  here we ll have to set an id for each alert, so install a package in the client
+called uuid - 
+npm i uuid
+
+lets try to connect an alert in register.js while passwords do not match -
+import { connect } from 'react-redux';
+export default connect()(Register); //in the bottom
+import { setAlert } from '../../actions/alert';
+setalert instead of console.log
+
+create the alert component - alert.js
+rafcp - enter
+
+now embed this inside app.js - 
+
+use a set timeout to remove the alert after sometime -
+
+NOTE - Inside the main app.js file we ll be using the redux store, the store will get everything from index.js or rootreducer,
+then we have individual reducers like alert reducer, auth reducer which will be combined by the rootreducer and will be given to the store
+
+the alert.js in reducers basically evaluates the alert type, sees the action that has to be taken, and return accordingly
